@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Doctor Protection Blueprint</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --accent: #1D9E75; --accent-light: #E1F5EE; --accent-dark: #085041;
+    --amber: #BA7517; --amber-light: #FAEEDA;
+    --red: #A32D2D; --red-light: #FCEBEB;
+    --blue: #185FA5; --blue-light: #E6F1FB;
+    --border: rgba(0,0,0,0.1); --border-strong: rgba(0,0,0,0.18);
+    --bg: #F8F7F4; --surface: #FFFFFF; --surface2: #F1EFE8;
+    --text: #1a1a18; --text2: #5F5E5A; --text3: #888780;
+    --radius: 10px; --radius-lg: 14px;
+    --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.6; }
+  a { color: var(--accent); text-decoration: none; }
+
+  /* AUTH */
+  #authScreen { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--bg); }
+  .auth-card { background: var(--surface); border-radius: var(--radius-lg); border: 0.5px solid var(--border); padding: 2.5rem; width: 380px; box-shadow: var(--shadow-md); }
+  .auth-logo { font-size: 13px; font-weight: 500; color: var(--accent); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 1.5rem; }
+  .auth-card h2 { font-size: 22px; font-weight: 500; margin-bottom: 0.4rem; }
+  .auth-card p { font-size: 14px; color: var(--text2); margin-bottom: 1.75rem; }
+  .auth-error { font-size: 13px; color: var(--red); background: var(--red-light); padding: 8px 12px; border-radius: var(--radius); margin-bottom: 1rem; display: none; }
+
+  /* LAYOUT */
+  #appScreen { display: none; min-height: 100vh; }
+  .top-nav { background: var(--surface); border-bottom: 0.5px solid var(--border); padding: 0 2rem; height: 56px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+  .nav-brand { font-size: 14px; font-weight: 500; color: var(--text); display: flex; align-items: center; gap: 10px; }
+  .nav-brand span { color: var(--accent); font-weight: 600; }
+  .nav-right { display: flex; align-items: center; gap: 12px; }
+  .nav-user { font-size: 13px; color: var(--text2); }
+  .main-layout { display: flex; min-height: calc(100vh - 56px); }
+
+  /* SIDEBAR */
+  .sidebar { width: 220px; background: var(--surface); border-right: 0.5px solid var(--border); padding: 1.25rem 0; flex-shrink: 0; }
+  .sidebar-section { padding: 0 1rem; margin-bottom: 0.25rem; }
+  .sidebar-label { font-size: 11px; font-weight: 500; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; padding: 0 0.5rem; margin-bottom: 4px; margin-top: 1rem; }
+  .sidebar-item { display: flex; align-items: center; gap: 9px; padding: 7px 10px; border-radius: var(--radius); font-size: 14px; color: var(--text2); cursor: pointer; transition: all 0.12s; }
+  .sidebar-item:hover { background: var(--surface2); color: var(--text); }
+  .sidebar-item.active { background: var(--accent-light); color: var(--accent-dark); font-weight: 500; }
+  .sidebar-item svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+  /* CONTENT */
+  .content { flex: 1; padding: 2rem; max-width: 960px; }
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* DASHBOARD */
+  .page-header { margin-bottom: 1.75rem; }
+  .page-header h1 { font-size: 22px; font-weight: 500; }
+  .page-header p { font-size: 14px; color: var(--text2); margin-top: 3px; }
+  .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 1.75rem; }
+  .stat-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 1.1rem 1.25rem; }
+  .stat-label { font-size: 12px; color: var(--text2); margin-bottom: 6px; }
+  .stat-val { font-size: 26px; font-weight: 500; }
+  .stat-val.green { color: var(--accent); }
+  .stat-val.amber { color: var(--amber); }
+  .stat-val.red { color: var(--red); }
+  .stat-sub { font-size: 12px; color: var(--text3); margin-top: 2px; }
+  .clients-table { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+  .table-header { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.25rem; border-bottom: 0.5px solid var(--border); }
+  .table-header h3 { font-size: 15px; font-weight: 500; }
+  table { width: 100%; border-collapse: collapse; }
+  th { font-size: 12px; font-weight: 500; color: var(--text2); text-transform: uppercase; letter-spacing: 0.04em; padding: 10px 1.25rem; text-align: left; background: var(--surface2); border-bottom: 0.5px solid var(--border); }
+  td { padding: 12px 1.25rem; font-size: 14px; border-bottom: 0.5px solid var(--border); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--surface2); cursor: pointer; }
+  .badge { display: inline-flex; align-items: center; font-size: 12px; padding: 3px 9px; border-radius: 20px; font-weight: 500; }
+  .badge.green { background: var(--accent-light); color: var(--accent-dark); }
+  .badge.amber { background: var(--amber-light); color: #412402; }
+  .badge.red { background: var(--red-light); color: #501313; }
+  .badge.blue { background: var(--blue-light); color: #042C53; }
+  .empty-state { text-align: center; padding: 3rem 2rem; color: var(--text2); }
+  .empty-state svg { width: 40px; height: 40px; margin: 0 auto 1rem; opacity: 0.3; display: block; }
+
+  /* SESSION FORM */
+  .session-nav { display: flex; gap: 4px; margin-bottom: 1.75rem; background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 5px; width: fit-content; }
+  .snav-btn { padding: 7px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; color: var(--text2); cursor: pointer; transition: all 0.12s; border: none; background: none; }
+  .snav-btn.active { background: var(--accent); color: white; }
+  .snav-btn:hover:not(.active) { background: var(--surface2); color: var(--text); }
+  .step { display: none; }
+  .step.active { display: block; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 1.25rem; }
+  .form-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 1.25rem; }
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field label { font-size: 13px; font-weight: 500; color: var(--text2); }
+  .field input, .field select, .field textarea { padding: 8px 11px; font-size: 14px; font-family: 'DM Sans', sans-serif; border: 0.5px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); color: var(--text); transition: border-color 0.12s; }
+  .field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: var(--accent); }
+  .field textarea { min-height: 80px; resize: vertical; }
+  .hint { background: var(--accent-light); border-left: 3px solid var(--accent); padding: 10px 14px; font-size: 13px; color: var(--accent-dark); line-height: 1.6; margin-bottom: 1.25rem; border-radius: 0 var(--radius) var(--radius) 0; }
+  .warn { background: var(--amber-light); border-left: 3px solid var(--amber); padding: 10px 14px; font-size: 13px; color: #412402; line-height: 1.6; margin-bottom: 1.25rem; border-radius: 0 var(--radius) var(--radius) 0; }
+  .section-title { font-size: 11px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 1rem; margin-top: 1.5rem; }
+  .section-title:first-child { margin-top: 0; }
+
+  /* RETIREMENT CALC */
+  .calc-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+  .calc-panel { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 1.25rem; }
+  .slider-row { margin-bottom: 14px; }
+  .slider-row label { display: flex; justify-content: space-between; font-size: 13px; color: var(--text2); margin-bottom: 5px; }
+  .slider-row label span { font-weight: 500; color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  .metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 1rem; }
+  .metric-card { background: var(--surface2); border-radius: var(--radius); padding: 0.9rem 1rem; }
+  .metric-label { font-size: 12px; color: var(--text2); margin-bottom: 4px; }
+  .metric-val { font-size: 20px; font-weight: 500; font-family: 'DM Mono', monospace; }
+  .metric-val.green { color: var(--accent); }
+  .metric-val.amber { color: var(--amber); }
+  .metric-val.red { color: var(--red); }
+  .progress-wrap { background: var(--surface2); border-radius: 6px; height: 8px; overflow: hidden; margin: 6px 0 10px; }
+  .progress-bar { height: 8px; border-radius: 6px; transition: width 0.4s ease; }
+  .progress-bar.green { background: var(--accent); }
+  .progress-bar.amber { background: #EF9F27; }
+  .progress-bar.red { background: #E24B4A; }
+
+  /* GAP ANALYSIS */
+  .gap-block { border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 1rem 1.25rem; margin-bottom: 10px; }
+  .gap-block.danger { border-left: 3px solid #E24B4A; }
+  .gap-block.warn { border-left: 3px solid #EF9F27; }
+  .gap-block.ok { border-left: 3px solid var(--accent); }
+  .gap-block h3 { font-size: 14px; font-weight: 500; margin-bottom: 5px; display: flex; align-items: center; gap: 8px; }
+  .gap-block p { font-size: 13px; color: var(--text2); line-height: 1.65; }
+  .strategy-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 1rem; }
+  .strategy-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 1rem 1.25rem; }
+  .strategy-card h3 { font-size: 13px; font-weight: 600; margin-bottom: 5px; color: var(--text); }
+  .strategy-card p { font-size: 13px; color: var(--text2); line-height: 1.6; }
+
+  /* BLUEPRINT */
+  .blueprint-summary { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 1.5rem; margin-bottom: 1.25rem; }
+  .client-header { display: flex; align-items: center; gap: 14px; margin-bottom: 1.25rem; padding-bottom: 1.25rem; border-bottom: 0.5px solid var(--border); }
+  .avatar { width: 46px; height: 46px; border-radius: 50%; background: var(--accent-light); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 15px; color: var(--accent-dark); flex-shrink: 0; }
+  .summary-row { display: flex; justify-content: space-between; align-items: center; padding: 9px 0; border-bottom: 0.5px solid var(--border); font-size: 14px; }
+  .summary-row:last-child { border-bottom: none; }
+  .summary-row .lbl { color: var(--text2); }
+  .summary-row .val { font-weight: 500; font-family: 'DM Mono', monospace; font-size: 13px; }
+
+  /* BUTTONS */
+  .btn { display: inline-flex; align-items: center; gap: 7px; padding: 9px 18px; font-size: 14px; font-weight: 500; border-radius: var(--radius); cursor: pointer; transition: all 0.12s; border: 0.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-family: 'DM Sans', sans-serif; }
+  .btn:hover { background: var(--surface2); }
+  .btn.primary { background: var(--accent); color: white; border-color: var(--accent-dark); }
+  .btn.primary:hover { background: var(--accent-dark); }
+  .btn.danger { background: var(--red-light); color: var(--red); border-color: var(--red); }
+  .btn-row { display: flex; justify-content: space-between; align-items: center; margin-top: 1.5rem; padding-top: 1.25rem; border-top: 0.5px solid var(--border); }
+  .btn-row-right { display: flex; gap: 10px; }
+
+  /* UTILS */
+  .divider { border: none; border-top: 0.5px solid var(--border); margin: 1.5rem 0; }
+  .loading { text-align: center; padding: 2rem; color: var(--text2); font-size: 14px; }
+  .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: var(--text); color: white; padding: 12px 20px; border-radius: var(--radius); font-size: 14px; z-index: 999; display: none; box-shadow: var(--shadow-md); }
+  .mono { font-family: 'DM Mono', monospace; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<!-- AUTH SCREEN -->
+<div id="authScreen">
+  <div class="auth-card">
+    <div class="auth-logo">Signature Squad</div>
+    <h2>Doctor Blueprint</h2>
+    <p>Sign in to access your advisory dashboard</p>
+    <div class="auth-error" id="authError"></div>
+    <div class="field" style="margin-bottom:12px;">
+      <label>Email</label>
+      <input type="email" id="authEmail" placeholder="you@example.com" autocomplete="email"/>
+    </div>
+    <div class="field" style="margin-bottom:1.5rem;">
+      <label>Password</label>
+      <input type="password" id="authPassword" placeholder="••••••••" autocomplete="current-password"/>
+    </div>
+    <button class="btn primary" style="width:100%; justify-content:center;" onclick="signIn()">Sign in</button>
+    <p style="text-align:center; margin-top:1rem; font-size:13px; color:var(--text2);">
+      No account? <a href="#" onclick="signUp()">Create one</a>
+    </p>
+  </div>
+</div>
+
+<!-- APP SCREEN -->
+<div id="appScreen">
+  <nav class="top-nav">
+    <div class="nav-brand"><span>Blueprint</span> Advisory System</div>
+    <div class="nav-right">
+      <span class="nav-user" id="navUser"></span>
+      <button class="btn" onclick="signOut()" style="padding:6px 14px; font-size:13px;">Sign out</button>
+    </div>
+  </nav>
+  <div class="main-layout">
+    <aside class="sidebar">
+      <div class="sidebar-section">
+        <div class="sidebar-label">Main</div>
+        <div class="sidebar-item active" onclick="showPage('dashboard')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          Dashboard
+        </div>
+        <div class="sidebar-item" onclick="newSession()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+          New session
+        </div>
+        <div class="sidebar-item" onclick="showPage('clients')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          All clients
+        </div>
+      </div>
+    </aside>
+    <main class="content">
+
+      <!-- DASHBOARD PAGE -->
+      <div class="page active" id="page-dashboard">
+        <div class="page-header">
+          <h1>Dashboard</h1>
+          <p>Overview of all advisory sessions</p>
+        </div>
+        <div class="stat-grid" id="statsGrid">
+          <div class="stat-card"><div class="stat-label">Total sessions</div><div class="stat-val" id="statTotal">—</div></div>
+          <div class="stat-card"><div class="stat-label">This month</div><div class="stat-val green" id="statMonth">—</div></div>
+          <div class="stat-card"><div class="stat-label">Avg CI gap</div><div class="stat-val amber" id="statCIGap">—</div></div>
+          <div class="stat-card"><div class="stat-label">High commitment</div><div class="stat-val green" id="statHighCommit">—</div></div>
+        </div>
+        <div class="clients-table">
+          <div class="table-header">
+            <h3>Recent sessions</h3>
+            <button class="btn primary" onclick="newSession()">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              New session
+            </button>
+          </div>
+          <div id="dashboardTable"><div class="loading">Loading sessions...</div></div>
+        </div>
+      </div>
+
+      <!-- CLIENTS PAGE -->
+      <div class="page" id="page-clients">
+        <div class="page-header">
+          <h1>All clients</h1>
+          <p>Full session history</p>
+        </div>
+        <div class="clients-table">
+          <div class="table-header">
+            <h3>All sessions</h3>
+            <button class="btn primary" onclick="newSession()">+ New session</button>
+          </div>
+          <div id="allClientsTable"><div class="loading">Loading...</div></div>
+        </div>
+      </div>
+
+      <!-- SESSION PAGE -->
+      <div class="page" id="page-session">
+        <div class="page-header">
+          <div style="display:flex; align-items:center; gap:12px; justify-content:space-between;">
+            <div>
+              <h1 id="sessionTitle">New session</h1>
+              <p id="sessionSubtitle">Advisory session tracker</p>
+            </div>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <span id="saveStatus" style="font-size:13px; color:var(--text3);"></span>
+              <button class="btn primary" onclick="saveSession()">Save session</button>
+            </div>
+          </div>
+        </div>
+        <div class="session-nav">
+          <button class="snav-btn active" onclick="showStep(0)">Frame</button>
+          <button class="snav-btn" onclick="showStep(1)">Discovery</button>
+          <button class="snav-btn" onclick="showStep(2)">Retirement</button>
+          <button class="snav-btn" onclick="showStep(3)">Gap analysis</button>
+          <button class="snav-btn" onclick="showStep(4)">Blueprint</button>
+        </div>
+
+        <!-- STEP 0: FRAME -->
+        <div class="step active" id="step-0">
+          <div class="hint">"Rather than jumping straight into products, I prefer understanding the overall financial structure first — especially for clinic owners where income and personal commitments are interconnected."</div>
+          <div class="form-grid">
+            <div>
+              <div class="section-title">Client info</div>
+              <div class="field" style="margin-bottom:12px;"><label>Client name</label><input type="text" id="f_name" placeholder="Dr. ..." oninput="updateSessionTitle()"/></div>
+              <div class="field" style="margin-bottom:12px;"><label>Clinic / practice</label><input type="text" id="f_clinic" placeholder="Clinic name"/></div>
+              <div class="field" style="margin-bottom:12px;"><label>Specialty</label><input type="text" id="f_specialty" placeholder="GP, specialist, surgeon..."/></div>
+              <div class="field" style="margin-bottom:12px;"><label>Age</label><input type="number" id="f_age" value="38" oninput="syncRetireSliders()"/></div>
+              <div class="field" style="margin-bottom:12px;"><label>Marital status</label><select id="f_marital"><option>Married</option><option>Single</option><option>Divorced</option></select></div>
+              <div class="field"><label>Number of dependents</label><input type="number" id="f_dependents" value="2"/></div>
+            </div>
+            <div>
+              <div class="section-title">Meeting</div>
+              <div class="field" style="margin-bottom:12px;"><label>Meeting date</label><input type="date" id="f_meetdate"/></div>
+              <div class="field" style="margin-bottom:12px;"><label>Referral / source</label><input type="text" id="f_referral" placeholder="How did you connect?"/></div>
+              <div class="field" style="margin-bottom:12px;"><label>Her primary concern today</label>
+                <select id="f_concern"><option>Not sure yet</option><option>Income if I can't work</option><option>Retirement planning</option><option>Family protection</option><option>Business continuity</option><option>Investment growth</option></select>
+              </div>
+              <div class="field"><label>First impressions / rapport notes</label><textarea id="f_framenotes" placeholder="Emotional cues, rapport, what she opened with..."></textarea></div>
+            </div>
+          </div>
+          <div class="btn-row"><div></div><div class="btn-row-right"><button class="btn primary" onclick="showStep(1)">Start discovery →</button></div></div>
+        </div>
+
+        <!-- STEP 1: DISCOVERY -->
+        <div class="step" id="step-1">
+          <div class="section-title">Section A — clinic & income structure</div>
+          <div class="hint">Key question behind every answer: <em>What collapses if she stops working?</em></div>
+          <div class="form-grid">
+            <div>
+              <div class="field" style="margin-bottom:12px;"><label>Monthly active income (RM)</label><input type="number" id="f_income" value="25000" oninput="calcRetirement()"/></div>
+              <div class="field" style="margin-bottom:12px;"><label>Clinic dependent on her only?</label>
+                <select id="f_dep"><option>Yes — sole income generator</option><option>Partially — partner or locum</option><option>No — has backup coverage</option></select>
+              </div>
+              <div class="field" style="margin-bottom:12px;"><label>Clinic ownership</label>
+                <select id="f_own"><option>Sole owner</option><option>Partner / co-owner</option><option>Employed doctor</option></select>
+              </div>
+              <div class="field"><label>Backup doctor available?</label>
+                <select id="f_backup"><option>No</option><option>Yes — locum occasionally</option><option>Yes — permanent partner</option></select>
+              </div>
+            </div>
+            <div>
+              <div class="field" style="margin-bottom:12px;"><label>Monthly clinic overhead (RM)</label><input type="number" id="f_overhead" value="8000"/></div>
+              <div class="field" style="margin-bottom:12px;"><label>Business loans outstanding (RM)</label><input type="number" id="f_bizloan" value="0"/></div>
+              <div class="field" style="margin-bottom:12px;"><label>Staff payroll (RM/mo)</label><input type="number" id="f_payroll" value="5000"/></div>
+              <div class="field"><label>Income structure notes</label><textarea id="f_incomenotes" placeholder="Business vs personal, seasonal patterns, other income sources..."></textarea></div>
+            </div>
+          </div>
+          <hr class="divider"/>
+          <div class="section-title">Section B — protection & liabilities</div>
+          <div class="form-grid-3">
+            <div class="field" style="margin-bottom:12px;"><label>Existing medical card</label><select id="f_medcard"><option>Yes — comprehensive</option><option>Yes — basic only</option><option>No</option></select></div>
+            <div class="field" style="margin-bottom:12px;"><label>CI coverage (RM)</label><input type="number" id="f_ci" value="0"/></div>
+            <div class="field" style="margin-bottom:12px;"><label>Life coverage (RM)</label><input type="number" id="f_life" value="0"/></div>
+            <div class="field" style="margin-bottom:12px;"><label>Emergency fund (months)</label><input type="number" id="f_emerg" value="3"/></div>
+            <div class="field" style="margin-bottom:12px;"><label>Savings & investments (RM)</label><input type="number" id="f_savings" value="0" oninput="calcRetirement()"/></div>
+            <div class="field" style="margin-bottom:12px;"><label>EPF balance (RM)</label><input type="number" id="f_epf" value="0" oninput="calcRetirement()"/></div>
+            <div class="field"><label>Home loan (RM)</label><input type="number" id="f_homeloan" value="0"/></div>
+            <div class="field"><label>Car / personal loans (RM)</label><input type="number" id="f_carloan" value="0"/></div>
+            <div class="field"><label>Other liabilities (RM)</label><input type="number" id="f_otherliab" value="0"/></div>
+          </div>
+          <hr class="divider"/>
+          <div class="section-title">Section C — lifestyle & legacy intent</div>
+          <div class="form-grid">
+            <div>
+              <div class="field" style="margin-bottom:12px;"><label>Desired monthly lifestyle (RM)</label><input type="number" id="f_lifestyle" value="20000" oninput="calcRetirement()"/></div>
+              <div class="field" style="margin-bottom:12px;"><label>Children's education fund (RM)</label><input type="number" id="f_edufund" value="0"/></div>
+              <div class="field"><label>Target retirement age</label><input type="number" id="f_retireage" value="60" oninput="syncRetireSliders()"/></div>
+            </div>
+            <div>
+              <div class="field" style="margin-bottom:12px;"><label>Primary emotional driver</label>
+                <select id="f_driver"><option>Freedom to reduce workload</option><option>Protecting family if something happens</option><option>Not wanting to depend on children</option><option>Keeping the clinic running</option><option>Leaving a legacy</option></select>
+              </div>
+              <div class="field"><label>Discovery notes</label><textarea id="f_discoverynotes" placeholder="Emotional cues, hesitations, what resonated, what surprised her..."></textarea></div>
+            </div>
+          </div>
+          <div class="btn-row"><button class="btn" onclick="showStep(0)">← Back</button><div class="btn-row-right"><button class="btn primary" onclick="showStep(2)">Open retirement calculator →</button></div></div>
+        </div>
+
+        <!-- STEP 2: RETIREMENT -->
+        <div class="step" id="step-2">
+          <div class="hint">"I'm curious — have you ever quantified how much freedom capital you'd eventually want?" Then: "Let's do a quick projection."</div>
+          <div class="warn">Remember: the number isn't the point. The <em>emotional realization</em> is. Let silence work after the gap appears.</div>
+          <div class="calc-layout">
+            <div class="calc-panel">
+              <div class="section-title" style="margin-top:0;">Adjust assumptions</div>
+              <div class="slider-row"><label>Current age <span id="r_ageOut">38</span></label><input type="range" min="25" max="65" value="38" id="r_age" oninput="sl('r_age','r_ageOut'); calcRetirement()"/></div>
+              <div class="slider-row"><label>Retire at age <span id="r_retireOut">60</span></label><input type="range" min="45" max="70" value="60" id="r_retire" oninput="sl('r_retire','r_retireOut'); calcRetirement()"/></div>
+              <div class="slider-row"><label>Live until age <span id="r_liveOut">80</span></label><input type="range" min="65" max="95" value="80" id="r_live" oninput="sl('r_live','r_liveOut'); calcRetirement()"/></div>
+              <div class="slider-row"><label>Monthly lifestyle (RM) <span id="r_lifestyleOut">20,000</span></label><input type="range" min="5000" max="60000" step="1000" value="20000" id="r_lifestyle" oninput="slCurr('r_lifestyle','r_lifestyleOut'); calcRetirement()"/></div>
+              <div class="slider-row"><label>Inflation rate <span id="r_inflOut">4.0%</span></label><input type="range" min="2" max="7" step="0.5" value="4" id="r_infl" oninput="slPct('r_infl','r_inflOut'); calcRetirement()"/></div>
+              <div class="slider-row"><label>Investment return <span id="r_retOut">6.0%</span></label><input type="range" min="3" max="12" step="0.5" value="6" id="r_ret" oninput="slPct('r_ret','r_retOut'); calcRetirement()"/></div>
+              <div class="slider-row"><label>EPF balance (RM) <span id="r_epfOut">0</span></label><input type="range" min="0" max="1000000" step="10000" value="0" id="r_epf" oninput="slCurr('r_epf','r_epfOut'); calcRetirement()"/></div>
+              <div class="slider-row"><label>Other savings (RM) <span id="r_savOut">0</span></label><input type="range" min="0" max="2000000" step="10000" value="0" id="r_sav" oninput="slCurr('r_sav','r_savOut'); calcRetirement()"/></div>
+            </div>
+            <div>
+              <div class="metrics-grid">
+                <div class="metric-card"><div class="metric-label">Years to retire</div><div class="metric-val" id="r_yearsTo">22</div></div>
+                <div class="metric-card"><div class="metric-label">Years in retirement</div><div class="metric-val" id="r_yearsIn">20</div></div>
+                <div class="metric-card"><div class="metric-label">Inflation-adj. monthly need</div><div class="metric-val amber" id="r_adjMonthly">—</div></div>
+                <div class="metric-card"><div class="metric-label">Total capital needed</div><div class="metric-val red" id="r_capNeeded">—</div></div>
+                <div class="metric-card"><div class="metric-label">Projected funds available</div><div class="metric-val green" id="r_fundsAvail">—</div></div>
+                <div class="metric-card"><div class="metric-label" id="r_gapLabel">Funding gap</div><div class="metric-val" id="r_gap">—</div></div>
+              </div>
+              <div class="calc-panel" style="margin-bottom:10px;">
+                <div class="metric-label" style="margin-bottom:5px;">Coverage ratio</div>
+                <div class="progress-wrap"><div class="progress-bar green" id="r_bar" style="width:0%"></div></div>
+                <div style="font-size:13px; color:var(--text2);" id="r_coverText">—</div>
+              </div>
+              <div class="calc-panel">
+                <div class="metric-label" style="margin-bottom:4px;">Monthly savings needed to close gap</div>
+                <div style="font-size:24px; font-weight:500; font-family:'DM Mono',monospace;" id="r_monthlySave">—</div>
+                <div style="font-size:12px; color:var(--text3); margin-top:3px;">Starting now, at assumed return rate</div>
+              </div>
+            </div>
+          </div>
+          <div style="position:relative; width:100%; height:240px; margin-top:1.25rem;">
+            <canvas id="retChart" role="img" aria-label="Retirement capital comparison chart">Capital needed vs available chart.</canvas>
+          </div>
+          <div class="btn-row"><button class="btn" onclick="showStep(1)">← Back</button><div class="btn-row-right"><button class="btn primary" onclick="showStep(3)">Analyse protection gaps →</button></div></div>
+        </div>
+
+        <!-- STEP 3: GAP ANALYSIS -->
+        <div class="step" id="step-3">
+          <div class="hint">"From what we've mapped today, the main risk isn't necessarily hospital bills." <em>[pause]</em> "It's the dependency on continuous active income."</div>
+          <div class="section-title">Protection gap breakdown</div>
+          <div id="gapBlocks"></div>
+          <hr class="divider"/>
+          <div class="section-title">Strategy categories to present</div>
+          <div class="strategy-grid">
+            <div class="strategy-card" style="border-left:3px solid var(--accent);"><h3>A — Income protection</h3><p>Maintains cashflow during recovery — clinic overhead, staff, and lifestyle covered, not just medical bills.</p></div>
+            <div class="strategy-card" style="border-left:3px solid var(--amber);"><h3>B — Critical illness</h3><p>Creates decision freedom. Lump sum means she chooses how to treat, rest, or restructure — without financial pressure.</p></div>
+            <div class="strategy-card" style="border-left:3px solid var(--blue);"><h3>C — Wealth accumulation</h3><p>Building the "freedom capital" we quantified — so reducing workload at 55 or 60 is a real option, not a dream.</p></div>
+            <div class="strategy-card" style="border-left:3px solid #E24B4A;"><h3>D — Legacy & business continuity</h3><p>Protects family and clinic stability. What happens to clinic, staff, loans, and family if she passes or is permanently disabled?</p></div>
+          </div>
+          <div class="btn-row"><button class="btn" onclick="showStep(2)">← Back</button><div class="btn-row-right"><button class="btn primary" onclick="showStep(4)">Generate blueprint →</button></div></div>
+        </div>
+
+        <!-- STEP 4: BLUEPRINT -->
+        <div class="step" id="step-4">
+          <div class="hint">"I'd like to consolidate everything we discussed into a proper Doctor Protection Blueprint — including your protection gap, income dependency exposure, and long-term financial positioning."</div>
+          <div class="blueprint-summary" id="blueprintSummary"></div>
+          <hr class="divider"/>
+          <div class="section-title">Next steps</div>
+          <div class="form-grid">
+            <div>
+              <div class="field" style="margin-bottom:12px;"><label>Second appointment date</label><input type="date" id="f_nextdate"/></div>
+              <div class="field"><label>What to prepare for next meeting</label><textarea id="f_nextnotes" placeholder="Documents needed, numbers to refine, strategy to present..."></textarea></div>
+            </div>
+            <div>
+              <div class="field" style="margin-bottom:12px;"><label>Her key emotional takeaway</label><textarea id="f_takeaway" placeholder="What moment hit hardest? What surprised her?"></textarea></div>
+              <div class="field"><label>Commitment level</label>
+                <select id="f_commit"><option>High — actively engaged</option><option>Medium — interested but cautious</option><option>Low — polite but non-committal</option><option>Needs more time</option></select>
+              </div>
+            </div>
+          </div>
+          <div class="btn-row">
+            <button class="btn" onclick="showStep(3)">← Back</button>
+            <div class="btn-row-right">
+              <button class="btn danger" id="deleteBtn" onclick="deleteSession()" style="display:none;">Delete session</button>
+              <button class="btn primary" onclick="saveSession()">Save & finish</button>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /page-session -->
+    </main>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── CONFIG ─────────────────────────────────────────────────────────────
+const SUPABASE_URL = 'https://vnqzyrkaiqvpkxupffxx.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZucXp5cmthaXF2cGt4dXBmZnh4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg0MTgxNzQsImV4cCI6MjA5Mzk5NDE3NH0.Bmj3oiAyI8cSRG6dKKlNo1MgXeDKsgiepCAdkMoF1NE';
+const { createClient } = supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let currentUser = null;
+let currentSessionId = null;
+let retChartInst = null;
+
+// ─── AUTH ────────────────────────────────────────────────────────────────
+async function signIn() {
+  const email = document.getElementById('authEmail').value.trim();
+  const pass = document.getElementById('authPassword').value;
+  const errEl = document.getElementById('authError');
+  errEl.style.display = 'none';
+  const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
+  if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
+  onSignedIn(data.user);
+}
+
+async function signUp() {
+  const email = document.getElementById('authEmail').value.trim();
+  const pass = document.getElementById('authPassword').value;
+  const errEl = document.getElementById('authError');
+  errEl.style.display = 'none';
+  if (!email || pass.length < 6) { errEl.textContent = 'Enter email and password (min 6 chars).'; errEl.style.display = 'block'; return; }
+  const { data, error } = await sb.auth.signUp({ email, password: pass });
+  if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
+  errEl.style.display = 'block'; errEl.style.background = '#E1F5EE'; errEl.style.color = '#085041';
+  errEl.textContent = 'Account created! Check your email to confirm, then sign in.';
+}
+
+async function signOut() {
+  await sb.auth.signOut();
+  currentUser = null;
+  document.getElementById('appScreen').style.display = 'none';
+  document.getElementById('authScreen').style.display = 'flex';
+}
+
+function onSignedIn(user) {
+  currentUser = user;
+  document.getElementById('authScreen').style.display = 'none';
+  document.getElementById('appScreen').style.display = 'block';
+  document.getElementById('navUser').textContent = user.email;
+  loadDashboard();
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('f_meetdate').value = today;
+  calcRetirement();
+}
+
+sb.auth.onAuthStateChange((event, session) => {
+  if (session?.user) onSignedIn(session.user);
+});
+
+// ─── NAVIGATION ─────────────────────────────────────────────────────────
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.sidebar-item').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  if (id === 'dashboard') { document.querySelector('.sidebar-item').classList.add('active'); loadDashboard(); }
+  if (id === 'clients') { loadAllClients(); }
+}
+
+function showStep(n) {
+  document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.snav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('step-' + n).classList.add('active');
+  document.querySelectorAll('.snav-btn')[n].classList.add('active');
+  if (n === 3) buildGapBlocks();
+  if (n === 4) buildBlueprint();
+}
+
+// ─── SESSION MANAGEMENT ─────────────────────────────────────────────────
+function newSession() {
+  currentSessionId = null;
+  clearForm();
+  showPage('session');
+  showStep(0);
+  document.getElementById('sessionTitle').textContent = 'New session';
+  document.getElementById('sessionSubtitle').textContent = 'Advisory session tracker';
+  document.getElementById('saveStatus').textContent = '';
+  document.getElementById('deleteBtn').style.display = 'none';
+  document.getElementById('f_meetdate').value = new Date().toISOString().split('T')[0];
+  calcRetirement();
+}
+
+function clearForm() {
+  const ids = ['f_name','f_clinic','f_specialty','f_referral','f_framenotes','f_incomenotes','f_discoverynotes','f_nextnotes','f_takeaway'];
+  ids.forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  document.getElementById('f_age').value = '38';
+  document.getElementById('f_dependents').value = '2';
+  document.getElementById('f_income').value = '25000';
+  document.getElementById('f_overhead').value = '8000';
+  document.getElementById('f_bizloan').value = '0';
+  document.getElementById('f_payroll').value = '5000';
+  document.getElementById('f_ci').value = '0';
+  document.getElementById('f_life').value = '0';
+  document.getElementById('f_emerg').value = '3';
+  document.getElementById('f_savings').value = '0';
+  document.getElementById('f_epf').value = '0';
+  document.getElementById('f_homeloan').value = '0';
+  document.getElementById('f_carloan').value = '0';
+  document.getElementById('f_otherliab').value = '0';
+  document.getElementById('f_lifestyle').value = '20000';
+  document.getElementById('f_edufund').value = '0';
+  document.getElementById('f_retireage').value = '60';
+  syncRetireSliders();
+}
+
+function updateSessionTitle() {
+  const name = document.getElementById('f_name').value;
+  if (name) {
+    document.getElementById('sessionTitle').textContent = name;
+    document.getElementById('sessionSubtitle').textContent = document.getElementById('f_clinic').value || 'Advisory session';
+  }
+}
+
+function gv(id, def) { const el = document.getElementById(id); if (!el) return def||0; return parseFloat(el.value)||def||0; }
+function gs(id) { const el = document.getElementById(id); return el ? el.value : ''; }
+
+function collectSession() {
+  return {
+    user_id: currentUser.id,
+    client_name: gs('f_name'), clinic: gs('f_clinic'), specialty: gs('f_specialty'),
+    age: gv('f_age'), marital: gs('f_marital'), dependents: gv('f_dependents'),
+    meet_date: gs('f_meetdate'), referral: gs('f_referral'), concern: gs('f_concern'),
+    frame_notes: gs('f_framenotes'),
+    monthly_income: gv('f_income'), clinic_dep: gs('f_dep'), clinic_own: gs('f_own'),
+    backup_doc: gs('f_backup'), overhead: gv('f_overhead'), biz_loan: gv('f_bizloan'), payroll: gv('f_payroll'),
+    income_notes: gs('f_incomenotes'),
+    med_card: gs('f_medcard'), ci_coverage: gv('f_ci'), life_coverage: gv('f_life'),
+    emerg_fund: gv('f_emerg'), savings: gv('f_savings'), epf: gv('f_epf'),
+    home_loan: gv('f_homeloan'), car_loan: gv('f_carloan'), other_liab: gv('f_otherliab'),
+    desired_lifestyle: gv('f_lifestyle'), edu_fund: gv('f_edufund'), retire_age: gv('f_retireage'),
+    emotional_driver: gs('f_driver'), discovery_notes: gs('f_discoverynotes'),
+    next_date: gs('f_nextdate'), next_notes: gs('f_nextnotes'),
+    emotional_takeaway: gs('f_takeaway'), commitment: gs('f_commit'),
+    ci_gap: calcCIGap(), life_gap: calcLifeGap(), retire_gap: calcRetireGap()
+  };
+}
+
+function calcCIGap() { return Math.max(0, gv('f_income') * 36 - gv('f_ci')); }
+function calcLifeGap() {
+  const debts = gv('f_homeloan') + gv('f_carloan') + gv('f_otherliab') + gv('f_bizloan');
+  return Math.max(0, debts + gv('f_income') * 120 - gv('f_life'));
+}
+function calcRetireGap() {
+  const age = gv('r_age') || gv('f_age') || 38;
+  const retireAt = gv('r_retire') || gv('f_retireage') || 60;
+  const liveUntil = gv('r_live') || 80;
+  const monthly = gv('r_lifestyle') || gv('f_lifestyle') || 20000;
+  const infl = (gv('r_infl') || 4) / 100;
+  const ret = (gv('r_ret') || 6) / 100;
+  const epf = gv('r_epf') || gv('f_epf') || 0;
+  const sav = gv('r_sav') || gv('f_savings') || 0;
+  const yearsTo = retireAt - age;
+  const yearsIn = liveUntil - retireAt;
+  const adjMonthly = monthly * Math.pow(1 + infl, yearsTo);
+  const adjAnnual = adjMonthly * 12;
+  const iarr = (1.04) / (1 + infl) - 1;
+  const capNeeded = Math.abs(iarr) < 0.0001 ? adjAnnual * yearsIn : adjAnnual * (1 - Math.pow(1 + iarr, -yearsIn)) / iarr;
+  const funds = epf * Math.pow(1 + ret, yearsTo) + sav * Math.pow(1 + ret, yearsTo);
+  return Math.max(0, capNeeded - funds);
+}
+
+function fillForm(d) {
+  const set = (id, val) => { const el = document.getElementById(id); if(el && val !== undefined && val !== null) el.value = val; };
+  set('f_name', d.client_name); set('f_clinic', d.clinic); set('f_specialty', d.specialty);
+  set('f_age', d.age); set('f_marital', d.marital); set('f_dependents', d.dependents);
+  set('f_meetdate', d.meet_date); set('f_referral', d.referral); set('f_concern', d.concern);
+  set('f_framenotes', d.frame_notes); set('f_income', d.monthly_income);
+  set('f_dep', d.clinic_dep); set('f_own', d.clinic_own); set('f_backup', d.backup_doc);
+  set('f_overhead', d.overhead); set('f_bizloan', d.biz_loan); set('f_payroll', d.payroll);
+  set('f_incomenotes', d.income_notes); set('f_medcard', d.med_card);
+  set('f_ci', d.ci_coverage); set('f_life', d.life_coverage); set('f_emerg', d.emerg_fund);
+  set('f_savings', d.savings); set('f_epf', d.epf); set('f_homeloan', d.home_loan);
+  set('f_carloan', d.car_loan); set('f_otherliab', d.other_liab);
+  set('f_lifestyle', d.desired_lifestyle); set('f_edufund', d.edu_fund); set('f_retireage', d.retire_age);
+  set('f_driver', d.emotional_driver); set('f_discoverynotes', d.discovery_notes);
+  set('f_nextdate', d.next_date); set('f_nextnotes', d.next_notes);
+  set('f_takeaway', d.emotional_takeaway); set('f_commit', d.commitment);
+  syncRetireSliders();
+  calcRetirement();
+}
+
+async function saveSession() {
+  const data = collectSession();
+  document.getElementById('saveStatus').textContent = 'Saving...';
+  let result;
+  if (currentSessionId) {
+    result = await sb.from('sessions').update(data).eq('id', currentSessionId).select().single();
+  } else {
+    result = await sb.from('sessions').insert(data).select().single();
+  }
+  if (result.error) { showToast('Error: ' + result.error.message); document.getElementById('saveStatus').textContent = ''; return; }
+  currentSessionId = result.data.id;
+  document.getElementById('saveStatus').textContent = 'Saved ✓';
+  document.getElementById('deleteBtn').style.display = 'inline-flex';
+  showToast('Session saved');
+  setTimeout(() => { document.getElementById('saveStatus').textContent = ''; }, 3000);
+}
+
+async function deleteSession() {
+  if (!currentSessionId) return;
+  if (!confirm('Delete this session? This cannot be undone.')) return;
+  const { error } = await sb.from('sessions').delete().eq('id', currentSessionId);
+  if (error) { showToast('Error: ' + error.message); return; }
+  showToast('Session deleted');
+  showPage('dashboard');
+}
+
+async function openSession(id) {
+  const { data, error } = await sb.from('sessions').select('*').eq('id', id).single();
+  if (error) { showToast('Error loading session'); return; }
+  currentSessionId = id;
+  fillForm(data);
+  showPage('session');
+  showStep(0);
+  document.getElementById('sessionTitle').textContent = data.client_name || 'Session';
+  document.getElementById('sessionSubtitle').textContent = data.clinic || '';
+  document.getElementById('deleteBtn').style.display = 'inline-flex';
+  document.getElementById('saveStatus').textContent = '';
+}
+
+// ─── DASHBOARD ───────────────────────────────────────────────────────────
+async function loadDashboard() {
+  const { data, error } = await sb.from('sessions').select('*').order('created_at', { ascending: false }).limit(20);
+  if (error) { document.getElementById('dashboardTable').innerHTML = '<div class="loading">Error loading data.</div>'; return; }
+  updateStats(data);
+  renderTable('dashboardTable', data);
+}
+
+async function loadAllClients() {
+  const { data, error } = await sb.from('sessions').select('*').order('created_at', { ascending: false });
+  if (error) return;
+  renderTable('allClientsTable', data);
+}
+
+function updateStats(rows) {
+  const now = new Date(); const thisMonth = rows.filter(r => { const d = new Date(r.created_at); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); });
+  const ciGaps = rows.filter(r => r.ci_gap > 0).map(r => r.ci_gap);
+  const avgCI = ciGaps.length ? ciGaps.reduce((a,b)=>a+b,0)/ciGaps.length : 0;
+  const highCommit = rows.filter(r => r.commitment && r.commitment.startsWith('High')).length;
+  document.getElementById('statTotal').textContent = rows.length;
+  document.getElementById('statMonth').textContent = thisMonth.length;
+  document.getElementById('statCIGap').textContent = avgCI > 0 ? 'RM' + Math.round(avgCI/1000) + 'k' : '—';
+  document.getElementById('statHighCommit').textContent = highCommit;
+}
+
+function renderTable(containerId, rows) {
+  const el = document.getElementById(containerId);
+  if (!rows || rows.length === 0) {
+    el.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>No sessions yet. Start a new session to begin.</div>';
+    return;
+  }
+  const rows_html = rows.map(r => {
+    const ciGap = r.ci_gap || 0; const lifeGap = r.life_gap || 0;
+    const gapBadge = (ciGap > 0 || lifeGap > 0) ? '<span class="badge red">Gaps found</span>' : '<span class="badge green">Reviewed</span>';
+    const commitBadge = r.commitment ? (r.commitment.startsWith('High') ? '<span class="badge green">High</span>' : r.commitment.startsWith('Medium') ? '<span class="badge amber">Medium</span>' : '<span class="badge red">Low</span>') : '—';
+    const date = r.meet_date || r.created_at?.split('T')[0] || '—';
+    return `<tr onclick="openSession('${r.id}')"><td><strong>${r.client_name || '—'}</strong><br><span style="font-size:12px;color:var(--text3);">${r.clinic||''}</span></td><td>${r.specialty||'—'}</td><td>${date}</td><td>${r.monthly_income ? 'RM'+Math.round(r.monthly_income).toLocaleString() : '—'}</td><td>${gapBadge}</td><td>${commitBadge}</td></tr>`;
+  }).join('');
+  el.innerHTML = `<table><thead><tr><th>Client</th><th>Specialty</th><th>Date</th><th>Income</th><th>Gaps</th><th>Commitment</th></tr></thead><tbody>${rows_html}</tbody></table>`;
+}
+
+// ─── RETIREMENT CALC ─────────────────────────────────────────────────────
+function sl(sid, oid) { document.getElementById(oid).textContent = document.getElementById(sid).value; }
+function slCurr(sid, oid) { document.getElementById(oid).textContent = 'RM ' + parseInt(document.getElementById(sid).value).toLocaleString(); }
+function slPct(sid, oid) { document.getElementById(oid).textContent = parseFloat(document.getElementById(sid).value).toFixed(1) + '%'; }
+
+function syncRetireSliders() {
+  const age = gv('f_age') || 38;
+  const retireAge = gv('f_retireage') || 60;
+  const epf = gv('f_epf') || 0;
+  const sav = gv('f_savings') || 0;
+  const lifestyle = gv('f_lifestyle') || 20000;
+  document.getElementById('r_age').value = age; sl('r_age', 'r_ageOut');
+  document.getElementById('r_retire').value = retireAge; sl('r_retire', 'r_retireOut');
+  document.getElementById('r_epf').value = epf; slCurr('r_epf', 'r_epfOut');
+  document.getElementById('r_sav').value = sav; slCurr('r_sav', 'r_savOut');
+  document.getElementById('r_lifestyle').value = lifestyle; slCurr('r_lifestyle', 'r_lifestyleOut');
+  calcRetirement();
+}
+
+function fmtRM(n) { if (n >= 1000000) return 'RM' + (n/1000000).toFixed(2) + 'M'; return 'RM' + Math.round(n).toLocaleString(); }
+
+function calcRetirement() {
+  const age = parseFloat(document.getElementById('r_age').value) || 38;
+  const retireAt = parseFloat(document.getElementById('r_retire').value) || 60;
+  const liveUntil = parseFloat(document.getElementById('r_live').value) || 80;
+  const monthly = parseFloat(document.getElementById('r_lifestyle').value) || 20000;
+  const infl = parseFloat(document.getElementById('r_infl').value) / 100;
+  const ret = parseFloat(document.getElementById('r_ret').value) / 100;
+  const epf = parseFloat(document.getElementById('r_epf').value) || 0;
+  const sav = parseFloat(document.getElementById('r_sav').value) || 0;
+  const yearsTo = Math.max(0, retireAt - age);
+  const yearsIn = Math.max(0, liveUntil - retireAt);
+  document.getElementById('r_yearsTo').textContent = Math.round(yearsTo);
+  document.getElementById('r_yearsIn').textContent = Math.round(yearsIn);
+  const adjMonthly = monthly * Math.pow(1 + infl, yearsTo);
+  const adjAnnual = adjMonthly * 12;
+  const iarr = (1.04) / (1 + infl) - 1;
+  const capNeeded = Math.abs(iarr) < 0.0001 ? adjAnnual * yearsIn : adjAnnual * (1 - Math.pow(1 + iarr, -yearsIn)) / iarr;
+  const epfFV = epf * Math.pow(1 + ret, yearsTo);
+  const savFV = sav * Math.pow(1 + ret, yearsTo);
+  const totalFunds = epfFV + savFV;
+  const gap = Math.max(0, capNeeded - totalFunds);
+  document.getElementById('r_adjMonthly').textContent = fmtRM(adjMonthly) + '/mo';
+  document.getElementById('r_capNeeded').textContent = fmtRM(capNeeded);
+  document.getElementById('r_fundsAvail').textContent = fmtRM(totalFunds);
+  const gapEl = document.getElementById('r_gap');
+  if (gap <= 0) { gapEl.textContent = 'On track'; gapEl.className = 'metric-val green'; document.getElementById('r_gapLabel').textContent = 'Status'; }
+  else { gapEl.textContent = fmtRM(gap); gapEl.className = 'metric-val red'; document.getElementById('r_gapLabel').textContent = 'Funding gap'; }
+  const cover = capNeeded > 0 ? Math.min(100, (totalFunds / capNeeded) * 100) : 0;
+  const bar = document.getElementById('r_bar'); bar.style.width = Math.round(cover) + '%';
+  bar.className = 'progress-bar ' + (cover >= 80 ? 'green' : cover >= 40 ? 'amber' : 'red');
+  document.getElementById('r_coverText').textContent = Math.round(cover) + '% of retirement capital currently projected';
+  let monthlySave = 0;
+  if (gap > 0 && yearsTo > 0) { const r = ret/12; const n = yearsTo*12; monthlySave = gap * r / (Math.pow(1+r,n)-1); }
+  document.getElementById('r_monthlySave').textContent = gap > 0 ? fmtRM(monthlySave) + '/mo' : 'On track ✓';
+  drawRetChart(capNeeded, totalFunds, gap);
+}
+
+function drawRetChart(needed, available, gap) {
+  const ctx = document.getElementById('retChart').getContext('2d');
+  if (retChartInst) retChartInst.destroy();
+  retChartInst = new Chart(ctx, {
+    type: 'bar',
+    data: { labels: ['Capital needed', 'Funds available', 'Funding gap'], datasets: [{ data: [Math.round(needed), Math.round(available), Math.round(gap)], backgroundColor: ['#378ADD','#1D9E75','#E24B4A'], borderRadius: 5 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => ' ' + fmtRM(c.raw) } } }, scales: { y: { ticks: { callback: v => 'RM' + (v/1000000).toFixed(1) + 'M', font: { size: 11 } }, grid: { color: 'rgba(128,128,128,0.08)' } }, x: { ticks: { font: { size: 12 } }, grid: { display: false } } } }
+  });
+}
+
+// ─── GAP ANALYSIS ────────────────────────────────────────────────────────
+function buildGapBlocks() {
+  const income = gv('f_income'); const ci = gv('f_ci'); const life = gv('f_life');
+  const home = gv('f_homeloan'); const car = gv('f_carloan'); const biz = gv('f_bizloan'); const other = gv('f_otherliab');
+  const emerg = gv('f_emerg'); const overhead = gv('f_overhead'); const payroll = gv('f_payroll');
+  const totalDebts = home + car + biz + other;
+  const recCI = income * 36; const ciGap = Math.max(0, recCI - ci);
+  const recLife = totalDebts + income * 120; const lifeGap = Math.max(0, recLife - life);
+  const items = [
+    { cls: ciGap > 0 ? 'danger' : 'ok', title: 'Critical illness coverage', icon: ciGap > 0 ? '⚠' : '✓', body: ciGap > 0 ? `Current CI: ${fmtRM(ci)}. Recommended: ${fmtRM(recCI)} (36× income). Gap: <strong>${fmtRM(ciGap)}</strong>. A CI event without adequate coverage means she bears treatment costs AND income loss simultaneously.` : `CI coverage at ${fmtRM(ci)} appears adequate. Review covered conditions and waiting periods.` },
+    { cls: lifeGap > 0 ? 'danger' : 'ok', title: 'Life & TPD protection', icon: lifeGap > 0 ? '⚠' : '✓', body: lifeGap > 0 ? `Current life: ${fmtRM(life)}. Recommended: ${fmtRM(recLife)} (debts + 10 years income). Gap: <strong>${fmtRM(lifeGap)}</strong>. Family and clinic face ${fmtRM(totalDebts)} in obligations.` : `Life coverage at ${fmtRM(life)} looks adequate. Confirm TPD rider and clinic loan cover.` },
+    { cls: emerg >= 6 ? 'ok' : 'warn', title: 'Emergency fund', icon: emerg >= 6 ? '✓' : '~', body: emerg >= 6 ? `${emerg} months buffer — solid foundation.` : `Only ${emerg} months buffer. Clinic owners need 6–12 months given fixed overhead, payroll (${fmtRM(payroll+overhead)}/mo), and variable income.` },
+    { cls: 'warn', title: 'Income dependency exposure', icon: '!', body: `Monthly active income: ${fmtRM(income)}. Fully dependent on physical presence. Clinic exposure (overhead + payroll): ${fmtRM(overhead+payroll)}/mo. A 3-month absence = ${fmtRM((overhead+payroll)*3)} in unrecovered fixed costs.` },
+    { cls: biz > 0 ? 'danger' : 'ok', title: 'Business continuity', icon: biz > 0 ? '⚠' : '✓', body: biz > 0 ? `${fmtRM(biz)} in business loans outstanding. Without a keyperson policy, this liability transfers to family or estate on her passing or permanent disability.` : `No business loans noted. Confirm keyperson cover is still appropriate for clinic continuity.` }
+  ];
+  document.getElementById('gapBlocks').innerHTML = items.map(i => `<div class="gap-block ${i.cls}"><h3><span>${i.icon}</span> ${i.title}</h3><p>${i.body}</p></div>`).join('');
+}
+
+// ─── BLUEPRINT ───────────────────────────────────────────────────────────
+function buildBlueprint() {
+  buildGapBlocks();
+  const name = gs('f_name') || 'Client'; const clinic = gs('f_clinic') || ''; const age = gv('f_age'); const retAge = gv('f_retireage');
+  const income = gv('f_income'); const ci = gv('f_ci'); const life = gv('f_life');
+  const debts = gv('f_homeloan') + gv('f_carloan') + gv('f_bizloan') + gv('f_otherliab');
+  const ciGap = calcCIGap(); const lifeGap = calcLifeGap(); const retGap = calcRetireGap();
+  const initials = name.replace('Dr.','').replace('Dr ','').trim().split(' ').map(w=>w[0]||'').slice(0,2).join('').toUpperCase() || 'DR';
+  const commitColor = { 'High — actively engaged': 'green', 'Medium — interested but cautious': 'amber', 'Low — polite but non-committal': 'red', 'Needs more time': 'amber' };
+  const commit = gs('f_commit'); const cc = commitColor[commit] || 'amber';
+  document.getElementById('blueprintSummary').innerHTML = `
+    <div class="client-header">
+      <div class="avatar">${initials}</div>
+      <div style="flex:1;">
+        <div style="font-size:17px; font-weight:500;">${name}</div>
+        <div style="font-size:13px; color:var(--text2);">${clinic} · Age ${age} · Target retire at ${retAge}</div>
+      </div>
+      <span class="badge ${cc}">${commit.split('—')[0].trim()}</span>
+    </div>
+    <div class="summary-row"><span class="lbl">Monthly active income</span><span class="val">${fmtRM(income)}/mo</span></div>
+    <div class="summary-row"><span class="lbl">Total liabilities</span><span class="val">${fmtRM(debts)}</span></div>
+    <div class="summary-row"><span class="lbl">CI coverage gap</span><span class="val" style="color:${ciGap>0?'var(--red)':'var(--accent)'}">${ciGap>0?fmtRM(ciGap):'No gap'}</span></div>
+    <div class="summary-row"><span class="lbl">Life coverage gap</span><span class="val" style="color:${lifeGap>0?'var(--red)':'var(--accent)'}">${lifeGap>0?fmtRM(lifeGap):'No gap'}</span></div>
+    <div class="summary-row"><span class="lbl">Retirement funding gap</span><span class="val" style="color:${retGap>0?'var(--red)':'var(--accent)'}">${retGap>0?fmtRM(retGap):'On track'}</span></div>
+    <div class="summary-row"><span class="lbl">Primary driver</span><span class="val" style="color:var(--accent); font-family:'DM Sans',sans-serif; font-size:13px;">${gs('f_driver')}</span></div>
+  `;
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast'); t.textContent = msg; t.style.display = 'block';
+  setTimeout(() => { t.style.display = 'none'; }, 2500);
+}
+
+window.onload = () => {
+  sl('r_age','r_ageOut'); sl('r_retire','r_retireOut'); sl('r_live','r_liveOut');
+  slCurr('r_lifestyle','r_lifestyleOut'); slPct('r_infl','r_inflOut'); slPct('r_ret','r_retOut');
+  slCurr('r_epf','r_epfOut'); slCurr('r_sav','r_savOut');
+};
+</script>
+</body>
+</html>
